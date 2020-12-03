@@ -1,0 +1,230 @@
+---
+title: "Reading data from web"
+output: github_document
+---
+```{r setup, include=FALSE}
+library(tidyverse)
+library(sqldf)
+library(httr)
+library(jsonlite)
+```
+
+
+##################################
+# READING CSV FILES FROM THE WEB #
+##################################
+
+#Add the URL inside the quotes
+
+```{r}
+url = "https://healthdata.gov/sites/default/files/estimated_inpatient_covid_20201201%201933.csv"
+```
+
+
+#Assign the csv data to a data frame
+```{r}
+covid_inpt = read.csv(url)
+```
+
+
+#Show the column names in the data frame
+```{r}
+names(covid_inpt)
+```
+
+
+#Show the first few rows of the data frame
+```{r}
+head(covid_inpt)
+```
+
+
+####################### SQL #######################
+
+install.packages("sqldf")
+
+
+##### To refer to variables with a period in the name, surround the variable name in [] #####
+
+#QUESTION 1 - Are the earliest and most recent dates reported the same for all states/terrories?  
+#If so, give the date of earliest and most recent reporting.  If not, list the different dates reported by state.
+```{r q1_1}
+report_date = sqldf(
+  "WITH rprt_date AS 
+       (SELECT state, MIN(collection_date) AS earliest_rprt_date, MAX(collection_date) AS latest_rprt_date
+       FROM covid_inpt
+       GROUP BY state)
+    SELECT COUNT(DISTINCT(earliest_rprt_date)), COUNT(DISTINCT(latest_rprt_date))
+    FROM rprt_date
+  ") 
+
+#The earliest and most recent dates reported the same for all states/terrories?  
+```
+
+
+```{r q1_2}
+earliset_last_date = sqldf(
+  "SELECT MIN(collection_date) AS earliest_rprt_date, MAX(collection_date) AS latest_rprt_date
+   FROM covid_inpt
+  "
+)
+
+#The earliest report date is 2020-10-31, and the most recent report date is 2020-11-30.
+```
+
+
+#QUESTION 2 - Which state/territory had the highest percentage of inpatient beds occupied by COVID-19
+#patients on 11/28/2020?  What percentage of inpatient beds were occupied?
+
+```{r}
+inpatient_beds_occupied = sqldf(
+  "SELECT state, [Percentage.of.Inpatient.Beds.Occupied.by.COVID.19.Patients.Estimated] AS percentage
+   FROM covid_inpt
+   WHERE collection_date = '2020-11-28'
+   GROUP BY state
+   ORDER BY percentage DESC
+   LIMIT 1
+  "
+)
+
+#The highest percentage of inpatient beds occupied by COVID-19 patients on 11/28/2020 is 23.13% in North Dakota. 
+```
+
+
+#QUESTION 3 - Which date and state/territory had the highest ever percentage of inpatient beds occupied by COVID-19
+#patients since recording began?
+
+```{r}
+highest_prctge = sqldf(
+  "SELECT state, collection_date, [Percentage.of.Inpatient.Beds.Occupied.by.COVID.19.Patients.Estimated] AS percentage
+   FROM covid_inpt
+   WHERE percentage IN 
+      (SELECT MAX([Percentage.of.Inpatient.Beds.Occupied.by.COVID.19.Patients.Estimated]) AS highest_percentage
+       FROM covid_inpt) 
+  "
+)
+
+# North Dakota on 2020-11-13 had the highest ever percentage (25.89%) of inpatient beds occupied by COVID-19 patients since recording began. 
+
+```
+
+
+#QUESTION 4 - What were the 3 worst days (by percentage) recorded for inpatient beds occupied by COVID-19 patients
+#in New York State?  Report the date, number, and percentage of inpatient beds occupied.
+```{r}
+
+worst_days = sqldf(
+  "SELECT collection_date, [Inpatient.Beds.Occupied.by.COVID.19.Patients.Estimated] AS number, [Percentage.of.Inpatient.Beds.Occupied.by.COVID.19.Patients.Estimated] AS percentage
+   FROM covid_inpt
+   WHERE state = 'NY' AND
+         percentage IN (
+            SELECT [Percentage.of.Inpatient.Beds.Occupied.by.COVID.19.Patients.Estimated]
+            FROM covid_inpt
+            WHERE state = 'NY'
+            ORDER BY [Percentage.of.Inpatient.Beds.Occupied.by.COVID.19.Patients.Estimated] DESC
+            LIMIT 3)
+  "
+)
+# The three worst days in NY state are 2020-11-28, 2020-11-29, and 2020-11-30. 
+```
+
+
+#QUESTION 5 - Which state/territory appears to have been most successful during the reporting period in
+#keeping COVID-19 patients out of inpatient beds?  Base on the average percentage of inpatient beds
+#utilized over the reporting period.
+
+```{r}
+best_state = sqldf(
+  "SELECT state, AVG([Percentage.of.Inpatient.Beds.Occupied.by.COVID.19.Patients.Estimated]) AS avg_pct
+   FROM covid_inpt
+   GROUP BY state
+   HAVING avg_pct IN 
+      (SELECT AVG([Percentage.of.Inpatient.Beds.Occupied.by.COVID.19.Patients.Estimated]) AS min_pct
+       FROM covid_inpt
+       GROUP BY state
+       ORDER BY min_pct
+       LIMIT 1)
+  "
+)
+
+# Vermont appears to have been most successful during the reporting period in keeping COVID-19 patients out of inpatient beds
+```
+
+
+#QUESTION 6 - Using the same query you wrote in #5, adjust it to show the top 10 most successful states
+#during the reporting period.   
+#Is New York State among the top 10? If yes, give its rank and average percentage.
+
+```{r}
+top_ten = sqldf(
+  "SELECT state, AVG([Percentage.of.Inpatient.Beds.Occupied.by.COVID.19.Patients.Estimated]) AS avg_pct, 
+        RANK(AVG([Percentage.of.Inpatient.Beds.Occupied.by.COVID.19.Patients.Estimated])) AS rank
+   FROM covid_inpt
+   GROUP BY state
+   HAVING avg_pct IN 
+      (SELECT AVG([Percentage.of.Inpatient.Beds.Occupied.by.COVID.19.Patients.Estimated]) AS min_pct
+       FROM covid_inpt
+       GROUP BY state
+       ORDER BY min_pct
+       LIMIT 10)
+   ORDER BY avg_pct 
+  "
+)
+
+# New York state is among the top 10. It ranks 8 with the average percentage of 6.373548
+```
+
+
+
+###################################################################
+# PULLING JSON DATA FROM THE WEB USING HTTR AND JSONLITE PACKAGES #
+###################################################################
+
+
+install.packages("jsonlite")  #This package will help convert JSON data to a data frame
+
+```{r}
+library(jsonlite)
+```
+
+
+#Restrict this data only to ZIP code 10032 and use SQL to provide an insight about restaurant 
+#violations in the campus neighborhood.
+
+#Pull restaurant violations data for Washington Heights
+wahi <- GET("[ADD YOUR LINK TO JSON DATA HERE]", query = list("zipcode" = 10032))
+new <- content(wahi, "text")
+
+#Create data frame from JSON data
+wahi_df <- fromJSON(new) #NOTE: this will be limited to 1000 records due to throttling
+
+#Show variable names for new data frame
+colnames(wahi_df)
+
+
+####################### SQL #######################
+
+#QUESTION 7 - How many critical violations are reported in this sample of inspections?
+
+
+#QUESTION 8 - Give the name and address (building, street) of restaurant(s) with the highest 
+#number of critical violations.  Account for possible ties in your results.
+
+
+#QUESTION 9 - Similarly to question 8, give the name and address (building, street) of 
+#restaurant(s) with the most A grades.  Account for possible ties in your results.
+
+
+#QUESTION 10 - Create a data frame called closed containing restaurants that were indicated 
+#to be closed in the action field.  The data frame should contain the restaurant name, 
+#address (building, street), inspection date, and action.
+
+
+#QUESTION 11 - List the restaurants included in the closed data frame and order them by number 
+#of closures, from most to least.  Include the restaurant name and address.
+
+
+#QUESTION 12 - Use SQL to answer a question of your choice about restaurant violations in the 
+#campus neighborhood.
+
+
