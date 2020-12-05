@@ -200,11 +200,21 @@ library(jsonlite)
 #violations in the campus neighborhood.
 
 #Pull restaurant violations data for Washington Heights
+
+```{r}
 wahi <- GET("https://data.cityofnewyork.us/resource/43nn-pn8j.json", query = list("zipcode" = 10032))
+
 new <- content(wahi, "text")
+```
+
+
 
 #Create data frame from JSON data
-wahi_df <- fromJSON(new) #NOTE: this will be limited to 1000 records due to throttling
+
+```{r}
+wahi_df <- fromJSON(new) 
+#NOTE: this will be limited to 1000 records due to throttling
+```
 
 #Show variable names for new data frame
 colnames(wahi_df)
