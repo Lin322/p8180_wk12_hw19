@@ -49,7 +49,7 @@ install.packages("sqldf")
 #QUESTION 1 - Are the earliest and most recent dates reported the same for all states/terrories?  
 #If so, give the date of earliest and most recent reporting.  If not, list the different dates reported by state.
 ```{r q1_1}
-report_date = sqldf(
+report_date_count = sqldf(
   "WITH rprt_date AS 
        (SELECT state, MIN(collection_date) AS earliest_rprt_date, MAX(collection_date) AS latest_rprt_date
        FROM covid_inpt
@@ -57,20 +57,21 @@ report_date = sqldf(
     SELECT COUNT(DISTINCT(earliest_rprt_date)), COUNT(DISTINCT(latest_rprt_date))
     FROM rprt_date
   ") 
-
-#The earliest and most recent dates reported the same for all states/terrories?  
-```
+report_date_count
 
 
-```{r q1_2}
 earliset_last_date = sqldf(
   "SELECT MIN(collection_date) AS earliest_rprt_date, MAX(collection_date) AS latest_rprt_date
    FROM covid_inpt
   "
 )
 
-#The earliest report date is 2020-10-31, and the most recent report date is 2020-11-30.
+earliset_last_date
+
+#The earliest and most recent dates reported are the same for all states/terrories. 
+#The earlist date is 2020-10-31 and the moset recent date is 2020-11-30. 
 ```
+
 
 
 #QUESTION 2 - Which state/territory had the highest percentage of inpatient beds occupied by COVID-19
@@ -86,6 +87,8 @@ inpatient_beds_occupied = sqldf(
    LIMIT 1
   "
 )
+
+inpatient_beds_occupied
 
 #The highest percentage of inpatient beds occupied by COVID-19 patients on 11/28/2020 is 23.13% in North Dakota. 
 ```
@@ -125,6 +128,7 @@ worst_days = sqldf(
             LIMIT 3)
   "
 )
+
 # The three worst days in NY state are 2020-11-28, 2020-11-29, and 2020-11-30. 
 ```
 

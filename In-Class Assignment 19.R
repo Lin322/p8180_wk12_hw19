@@ -23,7 +23,11 @@ library(sqldf)
 
 #QUESTION 1 - Are the earliest and most recent dates reported the same for all states/terrories?  
 #If so, give the date of earliest and most recent reporting.  If not, list the different dates reported by state.
-
+earliset_last_date = sqldf(
+  "SELECT state, MIN(collection_date) AS earliest_report_date, MAX(collection_date) AS most_recent_report_date
+   FROM covid_inpt
+   GROUP BY state
+  ")
 
 #QUESTION 2 - Which state/territory had the highest percentage of inpatient beds occupied by COVID-19
 #patients on 11/28/2020?  What percentage of inpatient beds were occupied?
