@@ -161,19 +161,23 @@ best_state = sqldf(
 
 ```{r}
 top_ten = sqldf(
-  "SELECT state, AVG([Percentage.of.Inpatient.Beds.Occupied.by.COVID.19.Patients.Estimated]) AS avg_pct, 
-        RANK(AVG([Percentage.of.Inpatient.Beds.Occupied.by.COVID.19.Patients.Estimated])) AS rank
-   FROM covid_inpt
-   GROUP BY state
-   HAVING avg_pct IN 
-      (SELECT AVG([Percentage.of.Inpatient.Beds.Occupied.by.COVID.19.Patients.Estimated]) AS min_pct
+  "WITH ten_states AS(
+       SELECT state, AVG([Percentage.of.Inpatient.Beds.Occupied.by.COVID.19.Patients.Estimated]) AS avg_pct
        FROM covid_inpt
        GROUP BY state
-       ORDER BY min_pct
-       LIMIT 10)
-   ORDER BY avg_pct 
+       HAVING avg_pct IN 
+          (SELECT AVG([Percentage.of.Inpatient.Beds.Occupied.by.COVID.19.Patients.Estimated]) AS min_pct
+           FROM covid_inpt
+           GROUP BY state
+           ORDER BY min_pct
+           LIMIT 10)
+       ORDER BY avg_pct)
+   SELECT *, RANK() OVER(ORDER BY avg_pct) AS rank_pct
+   FROM ten_states
   "
 )
+
+top_ten
 
 # New York state is among the top 10. It ranks 8 with the average percentage of 6.373548
 ```
@@ -196,7 +200,7 @@ library(jsonlite)
 #violations in the campus neighborhood.
 
 #Pull restaurant violations data for Washington Heights
-wahi <- GET("[ADD YOUR LINK TO JSON DATA HERE]", query = list("zipcode" = 10032))
+wahi <- GET("https://data.cityofnewyork.us/resource/43nn-pn8j.json", query = list("zipcode" = 10032))
 new <- content(wahi, "text")
 
 #Create data frame from JSON data
@@ -209,26 +213,122 @@ colnames(wahi_df)
 ####################### SQL #######################
 
 #QUESTION 7 - How many critical violations are reported in this sample of inspections?
+```{r}
+violation_count = sqldf(
+  "SELECT COUNT(violation_code) AS vio_count, COUNT(DISTINCT(violation_code)) AS vio_type_count
+   FROM wahi_df
+  "
+)
+
+violation_count
+
+#There are 980 violations in 58 categories have been reported in this sample. 
+
+```
 
 
 #QUESTION 8 - Give the name and address (building, street) of restaurant(s) with the highest 
 #number of critical violations.  Account for possible ties in your results.
+```{r}
+highest_vio = sqldf(
+  "SELECT dba, building, street, COUNT(violation_code) AS vio_count
+   FROM wahi_df
+   GROUP BY dba
+   HAVING vio_count IN 
+      (SELECT COUNT(violation_code) AS count
+       FROM wahi_df
+       GROUP BY dba
+       ORDER BY count DESC
+       LIMIT 1)
+  "
+)
+
+highest_vio
+
+#The restaurant with the highest number of violations is the BROTHER FISH MARKET, which located at 3845 Broadway and has 43 violations in total. 
+```
 
 
 #QUESTION 9 - Similarly to question 8, give the name and address (building, street) of 
 #restaurant(s) with the most A grades.  Account for possible ties in your results.
+```{r}
+highest_A = sqldf(
+  "SELECT dba, building, street, COUNT(grade) AS A_count
+   FROM wahi_df
+   GROUP BY dba
+   HAVING A_count IN 
+      (SELECT COUNT(grade) AS count
+       FROM wahi_df
+       GROUP BY dba
+       ORDER BY count DESC
+       LIMIT 1)
+  "
+)
+
+highest_A
+
+#The restaurant with the most A grades is the LA DINASTIA, which located at 4059 Broadway and has 17 A graede in total. 
+```
 
 
 #QUESTION 10 - Create a data frame called closed containing restaurants that were indicated 
 #to be closed in the action field.  The data frame should contain the restaurant name, 
 #address (building, street), inspection date, and action.
+```{r}
+action_type = sqldf(
+  "SELECT action
+   FROM wahi_df
+   GROUP BY action
+  "
+)
+
+closed = sqldf(
+  "SELECT DISTINCT dba, building, street, inspection_date, action
+   FROM wahi_df
+   WHERE action LIKE '%Closed%'
+  "
+)
+
+
+closed
+```
 
 
 #QUESTION 11 - List the restaurants included in the closed data frame and order them by number 
 #of closures, from most to least.  Include the restaurant name and address.
+```{r}
+closure_count = sqldf(
+  "SELECT dba, building, street, COUNT(inspection_date) AS close_count
+   FROM closed
+   GROUP BY dba, building, street
+   ORDER BY close_count DESC
+  "
+)
 
+closure_count
+```
 
 #QUESTION 12 - Use SQL to answer a question of your choice about restaurant violations in the 
 #campus neighborhood.
+```{r}
+#Question: what kind of violation is most common in this neighborhood? Give the violation code and description. 
+
+common_vio = sqldf(
+  "SELECT violation_code, violation_description, COUNT(violation_code) AS vio_count
+   FROM wahi_df
+   GROUP BY violation_code
+   HAVING vio_count IN 
+      (SELECT COUNT(violation_code) AS count
+       FROM wahi_df
+       GROUP BY violation_code
+       ORDER BY count DESC
+       LIMIT 1)
+  "
+)
+
+common_vio
+
+#The most common violation is 10F.
+```
 
 
